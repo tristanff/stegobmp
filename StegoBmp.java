@@ -1,139 +1,166 @@
+import javax.crypto.*;
+import javax.crypto.spec.IvParameterSpec;
+import javax.crypto.spec.SecretKeySpec;
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
-import java.io.File;
-import java.io.IOException;
+import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.security.*;
 import java.util.Arrays;
+
 
 public class StegoBmp {
 
-    public static void main(String[] args) {
-        if (args.length < 6) {
-            System.out.println("Usage: java StegoBmp -embed -in <file> -b <bitmapfile> -out <bitmapfile> -steg <LSB1 | LSB4 | LSBI>");
-            System.out.println("       java StegoBmp -extract -p <bitmapfile> -out <file> -steg <LSB1 | LSB4 | LSBI>");
-            return;
-        }
+        public static void main(String[] args) {
+            if (args.length < 8) {
+                System.out.println("Usage: java StegoBmp -embed -in <file> -b <bitmapfile> -out <bitmapfile> -steg <LSB1 | LSB4 | LSBI> -pass <password> -a <aes128 | aes192 | aes256 | des> -m <ecb | cfb | ofb | cbc>");
+                System.out.println("       java StegoBmp -extract -p <bitmapfile> -out <file> -steg <LSB1 | LSB4 | LSBI> -pass <password> -a <aes128 | aes192 | aes256 | des> -m <ecb | cfb | ofb | cbc>");
+                return;
+            }
 
-        String inFile = null, bmpFile = null, outFile = null, stegMethod = null;
-        boolean embed = false, extract = false;
+            String inFile = null, bmpFile = null, outFile = null, stegMethod = null, password = null;
+            String algorithm = null, mode = null;
+            boolean embed = false, extract = false;
 
-        for (int i = 0; i < args.length; i++) {
-            switch (args[i]) {
-                case "-embed":
-                    embed = true;
-                    break;
-                case "-extract":
-                    extract = true;
-                    break;
-                case "-in":
-                    inFile = args[++i];
-                    break;
-                case "-b":
-                case "-p":
-                    bmpFile = args[++i];
-                    break;
-                case "-out":
-                    outFile = args[++i];
-                    break;
-                case "-steg":
-                    stegMethod = args[++i];
-                    break;
+            for (int i = 0; i < args.length; i++) {
+                switch (args[i]) {
+                    case "-embed":
+                        embed = true;
+                        break;
+                    case "-extract":
+                        extract = true;
+                        break;
+                    case "-in":
+                        inFile = args[++i];
+                        break;
+                    case "-b":
+                    case "-p":
+                        bmpFile = args[++i];
+                        break;
+                    case "-out":
+                        outFile = args[++i];
+                        break;
+                    case "-steg":
+                        stegMethod = args[++i];
+                        break;
+                    case "-pass":
+                        password = args[++i];
+                        break;
+                    case "-a":
+                        algorithm = args[++i];
+                        break;
+                    case "-m":
+                        mode = args[++i];
+                        break;
+                }
+            }
+
+            if (bmpFile == null || outFile == null || stegMethod == null || password == null || algorithm == null || mode == null) {
+                System.out.println("Missing required parameters.");
+                return;
+            }
+
+            try {
+                Cipher cipher = Cipher.getInstance(algorithm + "/" + mode);
+
+                SecretKey secretKey = new SecretKeySpec(password.getBytes(), algorithm);
+                IvParameterSpec ivParameterSpec = new IvParameterSpec(password.getBytes());
+
+                if (embed) {
+                    if (inFile == null) {
+                        System.out.println("Missing input file for embedding.");
+                        return;
+                    }
+
+                    byte[] fileBytes = Files.readAllBytes(new File(inFile).toPath());
+                    int fileSize = fileBytes.length;
+                    String fileExtension = getFileExtension(inFile) + "\0";
+                    byte[] extBytes = fileExtension.getBytes();
+                    byte[] sizeBytes = intToBytes(fileSize);
+                    byte[] dataToHide = new byte[sizeBytes.length + fileBytes.length + extBytes.length];
+
+                    System.arraycopy(sizeBytes, 0, dataToHide, 0, sizeBytes.length);
+                    System.arraycopy(fileBytes, 0, dataToHide, sizeBytes.length, fileBytes.length);
+                    System.arraycopy(extBytes, 0, dataToHide, sizeBytes.length + fileBytes.length, extBytes.length);
+
+                    // Encrypt the data before embedding
+                    cipher.init(Cipher.ENCRYPT_MODE, secretKey, ivParameterSpec);
+                    byte[] encryptedData = cipher.doFinal(dataToHide);
+
+                    BufferedImage bmpImage = ImageIO.read(new File(bmpFile));
+                    if (bmpImage == null) {
+                        System.err.println("Error: The BMP file could not be read. Please check the file path and format.");
+                        return;
+                    }
+
+                    switch (stegMethod) {
+                        case "LSB1":
+                            embedLSB1(bmpImage, encryptedData);
+                            break;
+                        case "LSB4":
+                            embedLSB4(bmpImage, encryptedData);
+                            break;
+                        case "LSBI":
+                            embedLSBI(bmpImage, encryptedData);
+                            break;
+                        default:
+                            System.out.println("Invalid steganography method.");
+                            return;
+                    }
+
+                    ImageIO.write(bmpImage, "bmp", new File(outFile));
+                    System.out.println("File embedded successfully.");
+
+                } else if (extract) {
+                    BufferedImage bmpImage = ImageIO.read(new File(bmpFile));
+                    if (bmpImage == null) {
+                        System.err.println("Error: The BMP file could not be read. Please check the file path and format.");
+                        return;
+                    }
+
+                    byte[] extractedData;
+                    switch (stegMethod) {
+                        case "LSB1":
+                            extractedData = extractLSB1(bmpImage);
+                            break;
+                        case "LSB4":
+                            extractedData = extractLSB4(bmpImage);
+                            break;
+                        case "LSBI":
+                            extractedData = extractLSBI(bmpImage);
+                            break;
+                        default:
+                            System.out.println("Invalid steganography method.");
+                            return;
+                    }
+
+                    // Decrypt the extracted data
+                    cipher.init(Cipher.DECRYPT_MODE, secretKey, ivParameterSpec);
+                    byte[] decryptedData = cipher.doFinal(extractedData);
+
+                    int fileSize = bytesToInt(Arrays.copyOfRange(decryptedData, 0, 4));
+                    int nullTerminatorIndex = 4 + fileSize;
+                    while (decryptedData[nullTerminatorIndex] != 0) nullTerminatorIndex++;
+                    byte[] fileData = Arrays.copyOfRange(decryptedData, 4, 4 + fileSize);
+                    String fileExtension = new String(Arrays.copyOfRange(decryptedData, 4 + fileSize, nullTerminatorIndex));
+
+                    String outputFilePath = outFile;
+                    if (outputFilePath.length() > 255) {
+                        System.err.println("Error: The output file path is too long.");
+                        return;
+                    }
+
+                    Files.write(Paths.get(outputFilePath), fileData);
+                    System.out.println("File extracted successfully.");
+
+                } else {
+                    System.out.println("Specify either -embed or -extract.");
+                }
+            } catch (IOException | NoSuchAlgorithmException | NoSuchPaddingException | InvalidKeyException | BadPaddingException | IllegalBlockSizeException | InvalidAlgorithmParameterException e) {
+                e.printStackTrace();
             }
         }
-
-        if (bmpFile == null || outFile == null || stegMethod == null) {
-            System.out.println("Missing required parameters.");
-            return;
-        }
-
-        try {
-            if (embed) {
-                if (inFile == null) {
-                    System.out.println("Missing input file for embedding.");
-                    return;
-                }
-
-                byte[] fileBytes = Files.readAllBytes(new File(inFile).toPath());
-                int fileSize = fileBytes.length;
-                String fileExtension = getFileExtension(inFile) + "\0";
-                byte[] extBytes = fileExtension.getBytes();
-                byte[] sizeBytes = intToBytes(fileSize);
-                byte[] dataToHide = new byte[sizeBytes.length + fileBytes.length + extBytes.length];
-
-                System.arraycopy(sizeBytes, 0, dataToHide, 0, sizeBytes.length);
-                System.arraycopy(fileBytes, 0, dataToHide, sizeBytes.length, fileBytes.length);
-                System.arraycopy(extBytes, 0, dataToHide, sizeBytes.length + fileBytes.length, extBytes.length);
-
-                BufferedImage bmpImage = ImageIO.read(new File(bmpFile));
-                if (bmpImage == null) {
-                    System.err.println("Error: The BMP file could not be read. Please check the file path and format.");
-                    return;
-                }
-
-                switch (stegMethod) {
-                    case "LSB1":
-                        embedLSB1(bmpImage, dataToHide);
-                        break;
-                    case "LSB4":
-                        embedLSB4(bmpImage, dataToHide);
-                        break;
-                    case "LSBI":
-                        embedLSBI(bmpImage, dataToHide);
-                        break;
-                    default:
-                        System.out.println("Invalid steganography method.");
-                        return;
-                }
-
-                ImageIO.write(bmpImage, "bmp", new File(outFile));
-                System.out.println("File embedded successfully.");
-
-            } else if (extract) {
-                BufferedImage bmpImage = ImageIO.read(new File(bmpFile));
-                if (bmpImage == null) {
-                    System.err.println("Error: The BMP file could not be read. Please check the file path and format.");
-                    return;
-                }
-
-                byte[] extractedData;
-                switch (stegMethod) {
-                    case "LSB1":
-                        extractedData = extractLSB1(bmpImage);
-                        break;
-                    case "LSB4":
-                        extractedData = extractLSB4(bmpImage);
-                        break;
-                    case "LSBI":
-                        extractedData = extractLSBI(bmpImage);
-                        break;
-                    default:
-                        System.out.println("Invalid steganography method.");
-                        return;
-                }
-
-                int fileSize = bytesToInt(Arrays.copyOfRange(extractedData, 0, 4));
-                int nullTerminatorIndex = 4 + fileSize;
-                while (extractedData[nullTerminatorIndex] != 0) nullTerminatorIndex++;
-                byte[] fileData = Arrays.copyOfRange(extractedData, 4, 4 + fileSize);
-                String fileExtension = new String(Arrays.copyOfRange(extractedData, 4 + fileSize, nullTerminatorIndex));
-
-                String outputFilePath = outFile;
-                if (outputFilePath.length() > 255) {
-                    System.err.println("Error: The output file path is too long.");
-                    return;
-                }
-
-                Files.write(Paths.get(outputFilePath), fileData);
-                System.out.println("File extracted successfully.");
-
-            } else {
-                System.out.println("Specify either -embed or -extract.");
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-    }
 
     private static void embedLSB1(BufferedImage img, byte[] data) {
         int dataIndex = 0, dataBitIndex = 0;
