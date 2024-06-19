@@ -16,7 +16,7 @@ public class Encryptor {
         this.ivSize = algorithm.equalsIgnoreCase("DES") ? 8 : 16; // DES uses 8 bytes IV, AES uses 16 bytes
     }
 
-    public String decryptMessage(String encryptedHex, String password) {
+    public byte[] decryptMessage(byte[] encryptedBytes, String password) {
         try {
             Cipher cipher = null;
             SecretKey secretKey = null;
@@ -56,13 +56,10 @@ public class Encryptor {
                 cipher.init(Cipher.DECRYPT_MODE, secretKey);
             }
 
-            // Convert hexadecimal string to byte array
-            byte[] encryptedBytes = hexToBytes(encryptedHex);
-
             // Decrypt the message
             byte[] decryptedBytes = cipher.doFinal(encryptedBytes);
 
-            return new String(decryptedBytes, StandardCharsets.UTF_8);
+            return decryptedBytes;
         } catch (NoSuchAlgorithmException | NoSuchPaddingException | InvalidKeyException
                  | InvalidAlgorithmParameterException | IllegalBlockSizeException | BadPaddingException e) {
             e.printStackTrace();
@@ -70,7 +67,7 @@ public class Encryptor {
         }
     }
 
-    public String encryptMessage(String message, String password) {
+    public byte[] encryptMessage(byte[] messageBytes, String password) {
         try {
             Cipher cipher = null;
             SecretKey secretKey = null;
@@ -111,12 +108,9 @@ public class Encryptor {
             }
 
             // Encrypt the message
-            byte[] encryptedBytes = cipher.doFinal(message.getBytes(StandardCharsets.UTF_8));
+            byte[] encryptedBytes = cipher.doFinal(messageBytes);
 
-            // Convert encrypted bytes to hexadecimal string
-            String encryptedHex = bytesToHex(encryptedBytes);
-
-            return encryptedHex;
+            return encryptedBytes;
         } catch (NoSuchAlgorithmException | NoSuchPaddingException | InvalidKeyException
                  | InvalidAlgorithmParameterException | IllegalBlockSizeException | BadPaddingException e) {
             e.printStackTrace();
@@ -142,17 +136,35 @@ public class Encryptor {
         }
     }
 
-    private byte[] hexToBytes(String hex) {
-        if (hex == null || hex.isEmpty()) {
-            return new byte[0];
+    public static void main(String[] args) {
+        String[] algorithms = {"DES", "AES"};
+        String[] modes = {"ECB", "CBC", "CFB", "OFB"};
+        String password = "MySecretPassword";
+        String messageToEncrypt = "Hello World!";
+
+        for (String algorithm : algorithms) {
+            for (String mode : modes) {
+                Encryptor encryptor = new Encryptor(algorithm, mode);
+
+                // Convert message to bytes
+                byte[] messageBytes = messageToEncrypt.getBytes(StandardCharsets.UTF_8);
+
+                // Encrypt the message
+                byte[] encryptedBytes = encryptor.encryptMessage(messageBytes, password);
+                System.out.println("Algorithm: " + algorithm + ", Mode: " + mode);
+                System.out.println("Encrypted message (hex): " + bytesToHex(encryptedBytes));
+
+                // Decrypt the encrypted message
+                byte[] decryptedBytes = encryptor.decryptMessage(encryptedBytes, password);
+                if (decryptedBytes != null) {
+                    String decryptedMessage = new String(decryptedBytes, StandardCharsets.UTF_8);
+                    System.out.println("Decrypted message: " + decryptedMessage);
+                } else {
+                    System.out.println("Failed to decrypt the message.");
+                }
+                System.out.println();
+            }
         }
-        int len = hex.length();
-        byte[] data = new byte[len / 2];
-        for (int i = 0; i < len; i += 2) {
-            data[i / 2] = (byte) ((Character.digit(hex.charAt(i), 16) << 4)
-                    + Character.digit(hex.charAt(i + 1), 16));
-        }
-        return data;
     }
 
     public static String bytesToHex(byte[] bytes) {
@@ -166,29 +178,4 @@ public class Encryptor {
     }
 
     private static final byte[] HEX_ARRAY = "0123456789ABCDEF".getBytes();
-
-    public static void main(String[] args) {
-        String[] algorithms = {"DES", "AES"};
-        String[] modes = {"ECB", "CBC", "CFB", "OFB"};
-        String password = "MySecretPassword";
-        String messageToEncrypt = "Hello World!";
-
-        for (String algorithm : algorithms) {
-            for (String mode : modes) {
-                Encryptor encryptor = new Encryptor(algorithm, mode);
-
-                String encryptedHex = encryptor.encryptMessage(messageToEncrypt, password);
-                System.out.println("Algorithm: " + algorithm + ", Mode: " + mode);
-                System.out.println("Encrypted message (hex): " + encryptedHex);
-
-                String decryptedMessage = encryptor.decryptMessage(encryptedHex, password);
-                if (decryptedMessage != null) {
-                    System.out.println("Decrypted message: " + decryptedMessage);
-                } else {
-                    System.out.println("Failed to decrypt the message.");
-                }
-                System.out.println();
-            }
-        }
-    }
 }
