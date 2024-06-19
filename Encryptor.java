@@ -8,13 +8,15 @@ public class Encryptor {
 
     private final String algorithm;
     private final String mode;
+    private final int ivSize; // Size of the initialization vector
 
     public Encryptor(String algorithm, String mode) {
         this.algorithm = algorithm;
         this.mode = mode.toUpperCase(); // Ensure mode is uppercase for consistency
+        this.ivSize = algorithm.equalsIgnoreCase("DES") ? 8 : 16; // DES uses 8 bytes IV, AES uses 16 bytes
     }
 
-    public String decryptMessage(String encryptedHex, String password, String initializationVectorHex) {
+    public String decryptMessage(String encryptedHex, String password) {
         try {
             Cipher cipher = null;
             SecretKey secretKey = null;
@@ -33,20 +35,20 @@ public class Encryptor {
             // Generate secret key from password
             secretKey = generateKey(password, algorithm.equalsIgnoreCase("des") ? "DES" : "AES", keySize);
 
-            // Initialize Cipher based on mode
-            if (mode.equals("CBC") || mode.equals("CFB") || mode.equals("OFB")) {
-                // Convert IV from hex to byte array
-                byte[] ivBytes = hexToBytes(initializationVectorHex);
-                ivParameterSpec = new IvParameterSpec(ivBytes);
-            }
+            // Derive IV from password
+            byte[] iv = deriveIVFromPassword(password, ivSize);
 
+            // Initialize Cipher based on mode
             if (mode.equals("CBC")) {
+                ivParameterSpec = new IvParameterSpec(iv);
                 cipher = Cipher.getInstance(algorithm + "/CBC/PKCS5Padding");
                 cipher.init(Cipher.DECRYPT_MODE, secretKey, ivParameterSpec);
             } else if (mode.equals("CFB")) {
+                ivParameterSpec = new IvParameterSpec(iv);
                 cipher = Cipher.getInstance(algorithm + "/CFB8/NoPadding");
                 cipher.init(Cipher.DECRYPT_MODE, secretKey, ivParameterSpec);
             } else if (mode.equals("OFB")) {
+                ivParameterSpec = new IvParameterSpec(iv);
                 cipher = Cipher.getInstance(algorithm + "/OFB/NoPadding");
                 cipher.init(Cipher.DECRYPT_MODE, secretKey, ivParameterSpec);
             } else {
@@ -68,7 +70,7 @@ public class Encryptor {
         }
     }
 
-    public String encryptMessage(String message, String password, String initializationVectorHex) {
+    public String encryptMessage(String message, String password) {
         try {
             Cipher cipher = null;
             SecretKey secretKey = null;
@@ -87,20 +89,20 @@ public class Encryptor {
             // Generate secret key from password
             secretKey = generateKey(password, algorithm.equalsIgnoreCase("des") ? "DES" : "AES", keySize);
 
-            // Initialize Cipher based on mode
-            if (mode.equals("CBC") || mode.equals("CFB") || mode.equals("OFB")) {
-                // Convert IV from hex to byte array
-                byte[] ivBytes = hexToBytes(initializationVectorHex);
-                ivParameterSpec = new IvParameterSpec(ivBytes);
-            }
+            // Derive IV from password
+            byte[] iv = deriveIVFromPassword(password, ivSize);
 
+            // Initialize Cipher based on mode
             if (mode.equals("CBC")) {
+                ivParameterSpec = new IvParameterSpec(iv);
                 cipher = Cipher.getInstance(algorithm + "/CBC/PKCS5Padding");
                 cipher.init(Cipher.ENCRYPT_MODE, secretKey, ivParameterSpec);
             } else if (mode.equals("CFB")) {
+                ivParameterSpec = new IvParameterSpec(iv);
                 cipher = Cipher.getInstance(algorithm + "/CFB8/NoPadding");
                 cipher.init(Cipher.ENCRYPT_MODE, secretKey, ivParameterSpec);
             } else if (mode.equals("OFB")) {
+                ivParameterSpec = new IvParameterSpec(iv);
                 cipher = Cipher.getInstance(algorithm + "/OFB/NoPadding");
                 cipher.init(Cipher.ENCRYPT_MODE, secretKey, ivParameterSpec);
             } else {
@@ -128,7 +130,22 @@ public class Encryptor {
         return new SecretKeySpec(Arrays.copyOf(key, keySize / 8), algorithm);
     }
 
+    private byte[] deriveIVFromPassword(String password, int ivSize) {
+        // Use SHA-256 to hash the password and derive the IV
+        try {
+            MessageDigest sha = MessageDigest.getInstance("SHA-256");
+            byte[] passwordHash = sha.digest(password.getBytes(StandardCharsets.UTF_8));
+            return Arrays.copyOf(passwordHash, ivSize); // Use the first 'ivSize' bytes as IV
+        } catch (NoSuchAlgorithmException e) {
+            e.printStackTrace();
+            return new byte[ivSize]; // Return empty IV in case of exception (not expected)
+        }
+    }
+
     private byte[] hexToBytes(String hex) {
+        if (hex == null || hex.isEmpty()) {
+            return new byte[0];
+        }
         int len = hex.length();
         byte[] data = new byte[len / 2];
         for (int i = 0; i < len; i += 2) {
@@ -160,18 +177,11 @@ public class Encryptor {
             for (String mode : modes) {
                 Encryptor encryptor = new Encryptor(algorithm, mode);
 
-                // Generate IV for CBC, CFB and OFB modes
-                int ivSize = algorithm.equalsIgnoreCase("DES") ? 8 : 16; // DES uses 8 bytes IV, AES uses 16 bytes
-                byte[] iv = new byte[ivSize];
-                new SecureRandom().nextBytes(iv);
-                String initializationVectorHex = bytesToHex(iv);
-
-                String encryptedHex = encryptor.encryptMessage(messageToEncrypt, password, initializationVectorHex);
+                String encryptedHex = encryptor.encryptMessage(messageToEncrypt, password);
                 System.out.println("Algorithm: " + algorithm + ", Mode: " + mode);
                 System.out.println("Encrypted message (hex): " + encryptedHex);
 
-                // Decrypt the encrypted message
-                String decryptedMessage = encryptor.decryptMessage(encryptedHex, password, initializationVectorHex);
+                String decryptedMessage = encryptor.decryptMessage(encryptedHex, password);
                 if (decryptedMessage != null) {
                     System.out.println("Decrypted message: " + decryptedMessage);
                 } else {
