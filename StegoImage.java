@@ -211,7 +211,11 @@ public class StegoImage {
             content[contentLen + bytecont] = isZero;
         }
 
-        return content;
+        int finalLen = contentLen + bytecont;
+        byte[] toReturn = new byte[finalLen];
+        System.arraycopy(content, 0, toReturn, 0 , finalLen);
+
+        return toReturn;
     }
 
 
@@ -264,7 +268,12 @@ public class StegoImage {
             bytecont++;
         }
 
-        return content;
+        int finalLen = contentLen + bytecont;
+        byte[] toReturn = new byte[finalLen];
+        System.arraycopy(content, 0, toReturn, 0 , finalLen);
+
+
+        return toReturn;
     }
 
 
@@ -279,6 +288,7 @@ public class StegoImage {
        //Saco los 4 bits Inversores
        for (int i = 0; i < 4; i++) {
             BInv[i] = (bmpData[imgOffset + i] & 1);
+            System.out.println(BInv[i]);
        }
 
        imgOffset += 4; //Pongo el offSet al comienzo de los datos de longitud
@@ -308,6 +318,8 @@ public class StegoImage {
             redByteCounter++;
         }
 
+        System.out.println(contentLen); //Hasta aca bien
+
         imgOffset += 48; // Pongo el offset al inicio del contenido
         
         int reserva = contentLen + 20; // por extension
@@ -315,6 +327,9 @@ public class StegoImage {
         content = new byte[reserva]; 
         byte aux = 0;
         int cont = 0;
+        int bmpByte = 0;
+
+        System.out.println(redByteCounter);
 
         for (int i = 0; i < contentLen; i++) {
             for (int j = 0; j < 12; j++) {
@@ -322,6 +337,7 @@ public class StegoImage {
                     if (j != 0){
                         aux = (byte)(aux << 1);
                     }
+                    bmpByte = bmpData[imgOffset + cont];
                     lastBit = bmpData[imgOffset + cont] & 1;
                     bitCambio = lastBit;
                     bitsPatron = (bmpData[imgOffset + cont] >>> 1) & 3;
@@ -333,18 +349,25 @@ public class StegoImage {
                         }
                     }
                     aux = (byte)(aux | bitCambio);
-                    cont++;
                 }
+                cont++;
                 redByteCounter++;
             }
             content[i] = aux;
-            aux = 0;
+            aux = (byte)(0);
         }
+
+        System.out.println((char)content[0]);
+        System.out.println(content[0]);
+        System.out.println((char)content[1]);
+        System.out.println((char)content[2]);
+        System.out.println((char)content[3]);
+        System.out.println((char)content[4]);
 
         byte isZero = 1;
         int bytecont = 0;
         while (isZero != 0) {
-            isZero = 0;
+            isZero = (byte)(0);
             for (int i = 0; i < 12; i++) {
                 if (redByteCounter % 3 != 0) {
                     if (i != 0){
@@ -361,14 +384,25 @@ public class StegoImage {
                         }
                     }
                     isZero = (byte)(isZero | bitCambio);
-                    cont++;
                 }
+                cont++;
                 redByteCounter++;
             }
             content[contentLen + bytecont] = isZero;
+            System.out.println((char)isZero);
             bytecont++;
         }
 
-        return content;
+        int finalLen = contentLen + bytecont;
+        byte[] toReturn = new byte[finalLen];
+        System.arraycopy(content, 0, toReturn, 0 , finalLen);
+
+        for (int i = 0; i < 5; i++) {
+            System.out.println((char)toReturn[contentLen + i]);
+        }
+
+
+
+        return toReturn;
     }
 }
