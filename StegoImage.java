@@ -348,7 +348,7 @@ public class StegoImage {
             for (int i = 0; i < 12; i++) {
                 if (redByteCounter % 3 != 0) {
                     if (i != 0){
-                        isZero = (byte)(isZero << 4);
+                        isZero = (byte)(isZero << 1);
                     }
                     lastBit = bmpData[imgOffset + cont] & 1;
                     bitCambio = lastBit;
