@@ -1,13 +1,12 @@
+import java.awt.image.BufferedImage;
+import java.io.*;
+import java.nio.file.Files;
+import java.security.*;
+import java.util.Arrays;
 import javax.crypto.*;
 import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 import javax.imageio.ImageIO;
-import java.awt.image.BufferedImage;
-import java.io.*;
-import java.nio.file.Files;
-import java.nio.file.Paths;
-import java.security.*;
-import java.util.Arrays;
 
 public class StegoBmp {
 

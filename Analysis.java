@@ -6,14 +6,20 @@ import java.nio.file.Paths;
 public class Analysis {
 
     public static void main(String[] args) {
-        String bmpFile = "data/paris.bmp";
+        String bmpFile = "data/lima.bmp";
 
             BMPReader bmpReader = new BMPReader();
             byte[] bmpData = bmpReader.readImage(bmpFile);
 
-            // Attempt to extract data using the LSBI method
-            byte[] extractedLSBI = StegoImage.steganalisisLSBI(bmpData);
+            // Attempt to extract encoded data using the LSB4 method
+            byte[] extractedLSBI = StegoImage.steganalisisLSB4(bmpData, true);
 
+            Encryptor encriptador = new Encryptor("aes", "cbc");
+
+            String pass = "sorpresa";
+            
+            byte[] decryptedfile = encriptador.decryptMessage(extractedLSBI, pass);
+            
             // Find the position of the first ASCII code for '.'
             int dotIndex = -1;
             /*for (int i = 0; i < extractedLSBI.length - 1; i++) {
