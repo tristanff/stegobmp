@@ -1,16 +1,15 @@
 # Stegobmp
-TP especia de Cripto
+TP implementacion de Cripto
 
+Lautaro Nicolas Gazzaneo - 61484
+Tristan Flechard - 66692
 
+Comandos a correr
 
-## Usage 
+1) Para compilar los archivos correr el siguiente comando:
+    javac .\Encryptor.java .\BMPReader.java .\StegoImage.java .\StegoBmp.java
 
-Hide file into bmp
-```bash
-java StegoBmp.java -embed -in message.txt -p quilmes.bmp -out out.bmp -steg LSB1
-```
+2) Para usar las funciones solo corran el comando 
+    java StegoBmp.java -embed -in <file> -b <bitmapfile> -out <bitmapfile> -steg <LSB1 | LSB4 | LSBI> [-pass <password>] [-a <aes128 | aes192 | aes256 | des>] [-m <ecb | cfb | ofb | cbc>]
 
-Extract secret file from bmp
-```bash
-java StegoBmp.java -embed -in message.txt -p quilmes.bmp -out out.bmp -steg LSB1
-```
+    java StegoBmp.java -extract -p <bitmapfile> -out <file> -steg <LSB1 | LSB4 | LSBI> [-pass <password>] [-a <aes128 | aes192 | aes256 | des>] [-m <ecb | cfb | ofb | cbc>]

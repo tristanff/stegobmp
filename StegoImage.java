@@ -1,3 +1,5 @@
+
+
 public class StegoImage {
 
     public static byte[] stegoLSB1(byte[] bmpData, byte[] byteMsg){
@@ -163,7 +165,7 @@ public class StegoImage {
         return bmpData;
     }
 
-    public static byte[] steganalisisLSB1(byte[] bmpData){
+    public static byte[] steganalisisLSB1(byte[] bmpData, boolean isEnc){
         BMPReader reading = new BMPReader();
         byte[] content;
         int contentLen = 0; // si se hace negativo se puede cambiar por long.
@@ -179,7 +181,13 @@ public class StegoImage {
 
         imgOffset += 32;
         
-        int reserva = contentLen + 20; // por extension
+        int reserva;
+        if (isEnc == false) {
+            reserva = contentLen + 20;
+        } else{
+            reserva = contentLen;
+        }
+        
 
         content = new byte[reserva]; 
         byte aux = 0;
@@ -197,25 +205,34 @@ public class StegoImage {
             aux = 0;
         }
 
-        byte isZero = 1;
-        int bytecont = 0;
-        while (isZero != 0) {
-            isZero = 0;
-            for (int i = 0; i < 8; i++) {
-                if (i != 0){
-                    isZero = (byte)(isZero << 1);
-                }
-                isZero = (byte)(isZero | bmpData[imgOffset + cont] & 1);
-                cont++;
-            }
-            content[contentLen + bytecont] = isZero;
-        }
 
+        if (isEnc == false) {
+            byte isZero = 1;
+            int bytecont = 0;
+            while (isZero != 0) {
+                isZero = 0;
+                for (int i = 0; i < 8; i++) {
+                    if (i != 0){
+                        isZero = (byte)(isZero << 1);
+                    }
+                    isZero = (byte)(isZero | bmpData[imgOffset + cont] & 1);
+                    cont++;
+                }
+                content[contentLen + bytecont] = isZero;
+            }
+    
+            int finalLen = contentLen + bytecont;
+            byte[] toReturn = new byte[finalLen];
+            System.arraycopy(content, 0, toReturn, 0 , finalLen);
+    
+            return toReturn; 
+        }
+        
         return content;
     }
 
 
-    public static byte[] steganalisisLSB4(byte[] bmpData){
+    public static byte[] steganalisisLSB4(byte[] bmpData, boolean isEnc){
         BMPReader reading = new BMPReader();
         byte[] content;
         int contentLen = 0; // si se hace negativo se puede cambiar por long.
@@ -231,7 +248,12 @@ public class StegoImage {
 
         imgOffset += 8;
         
-        int reserva = contentLen + 20; // por extension
+        int reserva;
+        if (isEnc == false) {
+            reserva = contentLen + 20;
+        } else{
+            reserva = contentLen;
+        }
 
         content = new byte[reserva]; 
         byte aux = 0;
@@ -249,26 +271,35 @@ public class StegoImage {
             aux = 0;
         }
 
-        byte isZero = 1;
-        int bytecont = 0;
-        while (isZero != 0) {
-            isZero = 0;
-            for (int i = 0; i < 2; i++) {
-                if (i != 0){
-                    isZero = (byte)(isZero << 4);
+        if (isEnc == false) {
+            byte isZero = 1;
+            int bytecont = 0;
+            while (isZero != 0) {
+                isZero = 0;
+                for (int i = 0; i < 2; i++) {
+                    if (i != 0){
+                        isZero = (byte)(isZero << 4);
+                    }
+                    isZero = (byte)(isZero | bmpData[imgOffset + cont] & 0x0F);
+                    cont++;
                 }
-                isZero = (byte)(isZero | bmpData[imgOffset + cont] & 0x0F);
-                cont++;
+                content[contentLen + bytecont] = isZero;
+                bytecont++;
             }
-            content[contentLen + bytecont] = isZero;
-            bytecont++;
+
+            int finalLen = contentLen + bytecont;
+            byte[] toReturn = new byte[finalLen];
+            System.arraycopy(content, 0, toReturn, 0 , finalLen);
+
+
+            return toReturn;
         }
 
         return content;
     }
 
 
-    public static byte[] steganalisisLSBI(byte[] bmpData){
+    public static byte[] steganalisisLSBI(byte[] bmpData, boolean isEnc){
         BMPReader reading = new BMPReader();
         byte[] content;
         int contentLen = 0; // si se hace negativo se puede cambiar por long.
@@ -279,6 +310,7 @@ public class StegoImage {
        //Saco los 4 bits Inversores
        for (int i = 0; i < 4; i++) {
             BInv[i] = (bmpData[imgOffset + i] & 1);
+            System.out.println(BInv[i]);
        }
 
        imgOffset += 4; //Pongo el offSet al comienzo de los datos de longitud
@@ -308,13 +340,23 @@ public class StegoImage {
             redByteCounter++;
         }
 
+        System.out.println(contentLen); //Hasta aca bien
+
         imgOffset += 48; // Pongo el offset al inicio del contenido
         
-        int reserva = contentLen + 20; // por extension
+        int reserva;
+        if (isEnc == false) {
+            reserva = contentLen + 20;
+        } else{
+            reserva = contentLen;
+        }
 
         content = new byte[reserva]; 
         byte aux = 0;
         int cont = 0;
+        int bmpByte = 0;
+
+        System.out.println(redByteCounter);
 
         for (int i = 0; i < contentLen; i++) {
             for (int j = 0; j < 12; j++) {
@@ -322,6 +364,7 @@ public class StegoImage {
                     if (j != 0){
                         aux = (byte)(aux << 1);
                     }
+                    bmpByte = bmpData[imgOffset + cont];
                     lastBit = bmpData[imgOffset + cont] & 1;
                     bitCambio = lastBit;
                     bitsPatron = (bmpData[imgOffset + cont] >>> 1) & 3;
@@ -333,40 +376,48 @@ public class StegoImage {
                         }
                     }
                     aux = (byte)(aux | bitCambio);
-                    cont++;
                 }
+                cont++;
                 redByteCounter++;
             }
             content[i] = aux;
-            aux = 0;
+            aux = (byte)(0);
         }
 
-        byte isZero = 1;
-        int bytecont = 0;
-        while (isZero != 0) {
-            isZero = 0;
-            for (int i = 0; i < 12; i++) {
-                if (redByteCounter % 3 != 0) {
-                    if (i != 0){
-                        isZero = (byte)(isZero << 4);
-                    }
-                    lastBit = bmpData[imgOffset + cont] & 1;
-                    bitCambio = lastBit;
-                    bitsPatron = (bmpData[imgOffset + cont] >>> 1) & 3;
-                    if (BInv[bitsPatron] == 1) {
-                        if (lastBit == 0) {
-                            bitCambio = 1;
-                        } else{
-                            bitCambio = 0;
+        if (isEnc == false) {
+            byte isZero = 1;
+            int bytecont = 0;
+            while (isZero != 0) {
+                isZero = (byte)(0);
+                for (int i = 0; i < 12; i++) {
+                    if (redByteCounter % 3 != 0) {
+                        if (i != 0){
+                            isZero = (byte)(isZero << 1);
                         }
+                        lastBit = bmpData[imgOffset + cont] & 1;
+                        bitCambio = lastBit;
+                        bitsPatron = (bmpData[imgOffset + cont] >>> 1) & 3;
+                        if (BInv[bitsPatron] == 1) {
+                            if (lastBit == 0) {
+                                bitCambio = 1;
+                            } else{
+                                bitCambio = 0;
+                            }
+                        }
+                        isZero = (byte)(isZero | bitCambio);
                     }
-                    isZero = (byte)(isZero | bitCambio);
                     cont++;
+                    redByteCounter++;
                 }
-                redByteCounter++;
+                content[contentLen + bytecont] = isZero;
+                bytecont++;
             }
-            content[contentLen + bytecont] = isZero;
-            bytecont++;
+
+            int finalLen = contentLen + bytecont;
+            byte[] toReturn = new byte[finalLen];
+            System.arraycopy(content, 0, toReturn, 0 , finalLen);
+
+            return toReturn;
         }
 
         return content;

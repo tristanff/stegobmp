@@ -2,7 +2,10 @@ import javax.crypto.*;
 import javax.crypto.spec.*;
 import java.nio.charset.StandardCharsets;
 import java.security.*;
+import java.security.spec.InvalidKeySpecException;
+import java.security.spec.KeySpec;
 import java.util.Arrays;
+import java.util.Base64;
 
 public class Encryptor {
 
@@ -33,22 +36,20 @@ public class Encryptor {
             }
 
             // Generate secret key from password
-            secretKey = generateKey(password, algorithm.equalsIgnoreCase("des") ? "DES" : "AES", keySize);
+            SecretKey derivedKey = generateKey(password, algorithm.equalsIgnoreCase("des") ? "DES" : "AES", keySize);
+            secretKey = new SecretKeySpec(Arrays.copyOfRange(derivedKey.getEncoded(), 0, keySize / 8), algorithm);
 
-            // Derive IV from password
-            byte[] iv = deriveIVFromPassword(password, ivSize);
+            // Extract IV from derived key
+            ivParameterSpec = extractIV(derivedKey, keySize / 8, ivSize);
 
             // Initialize Cipher based on mode
             if (mode.equals("CBC")) {
-                ivParameterSpec = new IvParameterSpec(iv);
                 cipher = Cipher.getInstance(algorithm + "/CBC/PKCS5Padding");
                 cipher.init(Cipher.DECRYPT_MODE, secretKey, ivParameterSpec);
             } else if (mode.equals("CFB")) {
-                ivParameterSpec = new IvParameterSpec(iv);
                 cipher = Cipher.getInstance(algorithm + "/CFB8/NoPadding");
                 cipher.init(Cipher.DECRYPT_MODE, secretKey, ivParameterSpec);
             } else if (mode.equals("OFB")) {
-                ivParameterSpec = new IvParameterSpec(iv);
                 cipher = Cipher.getInstance(algorithm + "/OFB/NoPadding");
                 cipher.init(Cipher.DECRYPT_MODE, secretKey, ivParameterSpec);
             } else {
@@ -60,8 +61,9 @@ public class Encryptor {
             byte[] decryptedBytes = cipher.doFinal(encryptedBytes);
 
             return decryptedBytes;
-        } catch (NoSuchAlgorithmException | NoSuchPaddingException | InvalidKeyException
-                 | InvalidAlgorithmParameterException | IllegalBlockSizeException | BadPaddingException e) {
+        } catch (NoSuchAlgorithmException | NoSuchPaddingException | InvalidKeyException |
+                 InvalidAlgorithmParameterException | IllegalBlockSizeException | BadPaddingException |
+                 InvalidKeySpecException e) {
             e.printStackTrace();
             return null;
         }
@@ -84,22 +86,20 @@ public class Encryptor {
             }
 
             // Generate secret key from password
-            secretKey = generateKey(password, algorithm.equalsIgnoreCase("des") ? "DES" : "AES", keySize);
+            SecretKey derivedKey = generateKey(password, algorithm.equalsIgnoreCase("des") ? "DES" : "AES", keySize);
+            secretKey = new SecretKeySpec(Arrays.copyOfRange(derivedKey.getEncoded(), 0, keySize / 8), algorithm);
 
-            // Derive IV from password
-            byte[] iv = deriveIVFromPassword(password, ivSize);
+            // Extract IV from derived key
+            ivParameterSpec = extractIV(derivedKey, keySize / 8, ivSize);
 
             // Initialize Cipher based on mode
             if (mode.equals("CBC")) {
-                ivParameterSpec = new IvParameterSpec(iv);
                 cipher = Cipher.getInstance(algorithm + "/CBC/PKCS5Padding");
                 cipher.init(Cipher.ENCRYPT_MODE, secretKey, ivParameterSpec);
             } else if (mode.equals("CFB")) {
-                ivParameterSpec = new IvParameterSpec(iv);
                 cipher = Cipher.getInstance(algorithm + "/CFB8/NoPadding");
                 cipher.init(Cipher.ENCRYPT_MODE, secretKey, ivParameterSpec);
             } else if (mode.equals("OFB")) {
-                ivParameterSpec = new IvParameterSpec(iv);
                 cipher = Cipher.getInstance(algorithm + "/OFB/NoPadding");
                 cipher.init(Cipher.ENCRYPT_MODE, secretKey, ivParameterSpec);
             } else {
@@ -111,35 +111,44 @@ public class Encryptor {
             byte[] encryptedBytes = cipher.doFinal(messageBytes);
 
             return encryptedBytes;
-        } catch (NoSuchAlgorithmException | NoSuchPaddingException | InvalidKeyException
-                 | InvalidAlgorithmParameterException | IllegalBlockSizeException | BadPaddingException e) {
+        } catch (NoSuchAlgorithmException | NoSuchPaddingException | InvalidKeyException |
+                 InvalidAlgorithmParameterException | IllegalBlockSizeException | BadPaddingException |
+                 InvalidKeySpecException e) {
             e.printStackTrace();
             return null;
         }
     }
 
-    private SecretKeySpec generateKey(String password, String algorithm, int keySize) throws NoSuchAlgorithmException {
-        MessageDigest sha = MessageDigest.getInstance("SHA-256");
-        byte[] key = sha.digest(password.getBytes(StandardCharsets.UTF_8));
-        return new SecretKeySpec(Arrays.copyOf(key, keySize / 8), algorithm);
+    private SecretKey generateKey(String password, String algorithm, int keySize) throws NoSuchAlgorithmException, InvalidKeySpecException {
+        // Use a fixed salt for PBKDF2
+        byte[] salt = {
+                0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00
+        };
+
+        // Configure PBKDF2 parameters
+        int iterations = 10000; // Number of iterations
+        KeySpec spec = new PBEKeySpec(password.toCharArray(), salt, iterations, keySize + ivSize * 8);
+
+        // Generate the secret key
+        SecretKeyFactory factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256");
+        byte[] encodedKey = factory.generateSecret(spec).getEncoded();
+        System.out.println("Generated Key (Hex): " + bytesToHex(encodedKey));
+        // Create and return the SecretKeySpec
+        return new SecretKeySpec(encodedKey, algorithm);
     }
 
-    private byte[] deriveIVFromPassword(String password, int ivSize) {
-        // Use SHA-256 to hash the password and derive the IV
-        try {
-            MessageDigest sha = MessageDigest.getInstance("SHA-256");
-            byte[] passwordHash = sha.digest(password.getBytes(StandardCharsets.UTF_8));
-            return Arrays.copyOf(passwordHash, ivSize); // Use the first 'ivSize' bytes as IV
-        } catch (NoSuchAlgorithmException e) {
-            e.printStackTrace();
-            return new byte[ivSize]; // Return empty IV in case of exception (not expected)
-        }
+    private IvParameterSpec extractIV(SecretKey derivedKey, int keySizeBytes, int blockSizeBytes) {
+        byte[] ivBytes = new byte[blockSizeBytes];
+        System.arraycopy(derivedKey.getEncoded(), keySizeBytes, ivBytes, 0, blockSizeBytes);
+        System.out.println("Extracted IV (Hex): " + bytesToHex(ivBytes));
+        return new IvParameterSpec(ivBytes);
     }
 
     public static void main(String[] args) {
         String[] algorithms = {"DES", "AES"};
         String[] modes = {"ECB", "CBC", "CFB", "OFB"};
-        String password = "MySecretPassword";
+        String password = "margarita";
         String messageToEncrypt = "Hello World!";
 
         for (String algorithm : algorithms) {

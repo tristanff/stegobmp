@@ -1,20 +1,15 @@
-import javax.crypto.*;
-import javax.crypto.spec.IvParameterSpec;
-import javax.crypto.spec.SecretKeySpec;
-import javax.imageio.ImageIO;
-import java.awt.image.BufferedImage;
 import java.io.*;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.security.*;
 import java.util.Arrays;
 
-public class StegoBmp {
 
+public class StegoBmp{
 
 
     public static void main(String[] args) {
-        if (args.length < 8) {
+        if (args.length < 7) {
             System.out.println("Usage: java StegoBmp -embed -in <file> -b <bitmapfile> -out <bitmapfile> -steg <LSB1 | LSB4 | LSBI> [-pass <password>] [-a <aes128 | aes192 | aes256 | des>] [-m <ecb | cfb | ofb | cbc>]");
             System.out.println("       java StegoBmp -extract -p <bitmapfile> -out <file> -steg <LSB1 | LSB4 | LSBI> [-pass <password>] [-a <aes128 | aes192 | aes256 | des>] [-m <ecb | cfb | ofb | cbc>]");
             return;
@@ -36,6 +31,8 @@ public class StegoBmp {
                     inFile = args[++i];
                     break;
                 case "-b":
+                    bmpFile = args[++i];
+                    break;
                 case "-p":
                     bmpFile = args[++i];
                     break;
@@ -66,9 +63,7 @@ public class StegoBmp {
         }
 
         try {
-            Cipher cipher = null;
-            SecretKey secretKey = null;
-            IvParameterSpec ivParameterSpec = null;
+            Encryptor cipher = new Encryptor("AES", "DES");
 
             if (password != null) {
                 if (algorithm == null) {
@@ -77,21 +72,7 @@ public class StegoBmp {
                 if (mode == null) {
                     mode = "CBC";
                 }
-
-                int keySize = 128; // Default to AES-128
-                if (algorithm.equalsIgnoreCase("aes192")) {
-                    keySize = 192;
-                } else if (algorithm.equalsIgnoreCase("aes256")) {
-                    keySize = 256;
-                } else if (algorithm.equalsIgnoreCase("des")) {
-                    keySize = 64; // DES key size is 64 bits (8 bytes)
-                }
-
-                secretKey = generateKey(password, algorithm.equalsIgnoreCase("des") ? "DES" : "AES", keySize);
-                ivParameterSpec = generateIv(algorithm); // Generate the IV with the correct size
-
-                cipher = Cipher.getInstance(algorithm + "/" + mode + "/PKCS5Padding");
-                cipher.init(Cipher.ENCRYPT_MODE, secretKey, ivParameterSpec);
+                cipher = new Encryptor(algorithm, mode);
             }
 
             if (embed) {
@@ -113,38 +94,47 @@ public class StegoBmp {
 
                 // Encrypt the data before embedding if encryption is enabled
                 byte[] dataToEmbed = dataToHide;
-                if (cipher != null) {
-                    dataToEmbed = cipher.doFinal(dataToHide);
+                if (password != null) {
+                    dataToEmbed = cipher.encryptMessage(dataToHide, password);
                 }
 
-                writeHexToFile(dataToEmbed, "embedded_data_hex.txt");
-                BufferedImage bmpImage = ImageIO.read(new File(bmpFile));
-                if (bmpImage == null) {
+                //writeHexToFile(dataToEmbed, "embedded_data_hex.txt");
+                BMPReader ImageReader = new BMPReader();
+                byte[] imageData = ImageReader.readImage(bmpFile);
+                if (imageData == null) {
                     System.err.println("Error: The BMP file could not be read. Please check the file path and format.");
                     return;
                 }
 
+                byte[] finishData = null;
+
                 switch (stegMethod) {
                     case "LSB1":
-                        embedLSB1(bmpImage, dataToEmbed);
+                        finishData = StegoImage.stegoLSB1(imageData, dataToEmbed);
                         break;
                     case "LSB4":
-                        embedLSB4(bmpImage, dataToEmbed);
+                        finishData = StegoImage.stegoLSB4(imageData, dataToEmbed);
                         break;
                     case "LSBI":
-                        embedLSBI(bmpImage, dataToEmbed);
+                        finishData = StegoImage.stegoLSBI(imageData, dataToEmbed);
                         break;
                     default:
                         System.out.println("Invalid steganography method.");
                         return;
                 }
 
-                ImageIO.write(bmpImage, "bmp", new File(outFile));
+                if (finishData == null) {
+                    System.err.println("Error in stego of the data");
+                    return;
+                }
+                Path path = Paths.get(outFile);
+                Files.write(path, finishData);
                 System.out.println("File embedded successfully.");
 
             } else if (extract) {
-                BufferedImage bmpImage = ImageIO.read(new File(bmpFile));
-                if (bmpImage == null) {
+                BMPReader imageReader = new BMPReader();
+                byte[] photoToAnalise = imageReader.readImage(bmpFile);
+                if (photoToAnalise == null) {
                     System.err.println("Error: The BMP file could not be read. Please check the file path and format.");
                     return;
                 }
@@ -152,41 +142,71 @@ public class StegoBmp {
                 byte[] extractedData;
                 switch (stegMethod) {
                     case "LSB1":
-                        extractedData = extractLSB1(bmpImage);
+                        if (password == null) {
+                            extractedData = StegoImage.steganalisisLSB1(photoToAnalise, false);    
+                        } else{
+                            extractedData = StegoImage.steganalisisLSB1(photoToAnalise, true); 
+                        }
                         break;
                     case "LSB4":
-                        extractedData = extractLSB4(bmpImage);
+                        if (password == null) {
+                            extractedData = StegoImage.steganalisisLSB4(photoToAnalise, false);    
+                        } else{
+                            extractedData = StegoImage.steganalisisLSB4(photoToAnalise, true); 
+                        }
                         break;
                     case "LSBI":
-                        extractedData = extractLSBI(bmpImage);
+                        if (password == null) {
+                            extractedData = StegoImage.steganalisisLSBI(photoToAnalise, false);    
+                        } else{
+                            extractedData = StegoImage.steganalisisLSBI(photoToAnalise, true); 
+                        }
                         break;
                     default:
                         System.out.println("Invalid steganography method.");
                         return;
                 }
-                writeHexToFile(extractedData, "extracted_data_hex.txt");
+
+                //writeHexToFile(extractedData, "extracted_data_hex.txt");
                 // Decrypt the extracted data if encryption is enabled
                 byte[] dataToExtract = extractedData;
-                if (cipher != null) {
-                    cipher.init(Cipher.DECRYPT_MODE, secretKey, ivParameterSpec);
-                    dataToExtract = cipher.doFinal(extractedData);
+                byte[] dataDecoded = dataToExtract;
+                int fileSize;
+                byte[] fileData;
+                byte[] extBites;
+                if (password != null) {
+                    dataDecoded = cipher.decryptMessage(dataToExtract, password);
+                    fileSize = bytesToInt(Arrays.copyOfRange(dataDecoded, 0, 4));
+                    fileData = Arrays.copyOfRange(dataDecoded, 4, 4 + fileSize);
+                    extBites = Arrays.copyOfRange(dataDecoded, 4 + fileSize, dataDecoded.length - 1);
+                }else{
+                    int len1 = dataDecoded.length;
+                    int pospoint = 0;
+                    for (int i = 1; len1 - i > 1 && pospoint == 0; i++) {
+                        if (dataDecoded[len1-i] == 46) {
+                            pospoint = len1 - i;
+                        }
+                    }
+                    fileData = Arrays.copyOfRange(dataDecoded, 0, pospoint);
+                    extBites = Arrays.copyOfRange(dataDecoded, pospoint, dataDecoded.length);
                 }
 
-                int fileSize = bytesToInt(Arrays.copyOfRange(dataToExtract, 0, 4));
-                byte[] fileData = Arrays.copyOfRange(dataToExtract, 4, 4 + fileSize);
-
-                try (FileOutputStream fos = new FileOutputStream(outFile)) {
-                    fos.write(fileData);
-                }
+               
+                
+                String extension = new String(extBites);
+                String path = outFile.concat(extension);
+                Path finalPath = Paths.get(path);
+                Files.write(finalPath, fileData);
+                
                 System.out.println("File extracted successfully.");
             }
 
-        } catch (Exception e) {
+        } catch (IOException e) {
             e.printStackTrace();
         }
     }
 
-    private static void embedLSB1(BufferedImage img, byte[] data) {
+    /*private static void embedLSB1(BufferedImage img, byte[] data) {
         int dataIndex = 0, dataBitIndex = 0;
 
         outer: for (int y = 0; y < img.getHeight(); y++) {
@@ -281,7 +301,7 @@ public class StegoBmp {
     private static byte[] extractLSBI(BufferedImage img) {
         // Implementation of LSBI extraction
         return new byte[0];
-    }
+    }*/
 
     private static int bytesToInt(byte[] bytes) {
         return ((bytes[0] & 0xFF) << 24) | ((bytes[1] & 0xFF) << 16) | ((bytes[2] & 0xFF) << 8) | (bytes[3] & 0xFF);
@@ -304,7 +324,7 @@ public class StegoBmp {
         return "";
     }
 
-    private static SecretKeySpec generateKey(String password, String algorithm, int keySize) throws NoSuchAlgorithmException {
+    /*private static SecretKeySpec generateKey(String password, String algorithm, int keySize) throws NoSuchAlgorithmException {
         MessageDigest sha = MessageDigest.getInstance("SHA-256");
         byte[] key = sha.digest(password.getBytes());
         return new SecretKeySpec(Arrays.copyOf(key, keySize / 8), algorithm);
@@ -315,7 +335,7 @@ public class StegoBmp {
         byte[] iv = new byte[ivSize];
         new SecureRandom().nextBytes(iv);
         return new IvParameterSpec(iv);
-    }
+    }*/
 
     private static String byteToHex(byte b) {
         return String.format("%02X", b);
